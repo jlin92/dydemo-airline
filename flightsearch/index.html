@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flight Search — AuraAir</title>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="//cdn.dynamicyield.com" rel="preconnect"/>
+<link href="//st.dynamicyield.com" rel="preconnect"/>
+<link href="//rcom.dynamicyield.com" rel="preconnect"/>
+<script src="https://cdn.dynamicyield.com/api/8794849/api_dynamic.js" type="text/javascript"></script>
+<script src="https://cdn.dynamicyield.com/api/8794849/api_static.js" type="text/javascript"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&amp;family=DM+Sans:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body data-page="results">
+<nav class="transparent" id="mainNav">
+<a class="nav-logo" href="../">
+<div class="nav-logo-icon">A</div>
+<span class="nav-logo-text">AuraAir</span>
+</a>
+<div class="nav-links">
+<a href="#">Book</a>
+<a href="#">Manage</a>
+<a href="#">Check-in</a>
+<a href="#">Destinations</a>
+<a href="#">Experience</a>
+<a class="nav-cta" href="../">Sign In</a>
+</div>
+</nav>
+<div class="page" id="page-results">
+<div class="results-header">
+<div style="max-width:1200px;margin:0 auto">
+<div class="results-header-title" data-sku="SIN-NRT" id="resultsTitle">Singapore → Tokyo</div>
+<div class="results-header-sub" id="resultsSub">Mon, 14 Jul 2025 · 1 Adult · Economy · 24 results</div>
+<div class="results-search-bar">
+<div class="results-search-field"><label>From</label><input id="r-from" style="width:140px" type="text" value="Singapore (SIN)"/></div>
+<div class="results-divider"></div>
+<div class="results-search-field"><label>To</label>
+<select id="r-to" style="width:180px">
+<option value="Tokyo">Tokyo (NRT), Japan</option><option value="Seoul">Seoul (ICN), South Korea</option>
+<option value="London">London (LHR), UK</option><option value="Sydney">Sydney (SYD), Australia</option>
+<option value="Paris">Paris (CDG), France</option><option value="Dubai">Dubai (DXB), UAE</option>
+<option value="New York">New York (JFK), USA</option>
+</select>
+</div>
+<div class="results-divider"></div>
+<div class="results-search-field"><label>Depart</label><input id="r-depart" style="width:140px" type="date"/></div>
+<div class="results-divider"></div>
+<div class="results-search-field"><label>Return</label><input id="r-return" style="width:140px" type="date"/></div>
+<div class="results-divider"></div>
+<div class="results-search-field"><label>Passengers</label><select style="width:80px"><option>1 Adult</option><option>2 Adults</option><option>3 Adults</option></select></div>
+<a class="results-modify-btn" href="../" style="background:rgba(255,255,255,0.10);color:rgba(255,255,255,0.92);border:1px solid rgba(255,255,255,0.22);margin-left:auto">← Back</a>
+<button class="results-modify-btn" onclick="refreshResults()" style="margin-left:0">Update Search</button>
+</div>
+</div>
+</div>
+<div class="results-body">
+<div class="filter-sidebar">
+<div class="filter-title">Filter Results</div>
+<div class="filter-section"><h4>Stops</h4>
+<div class="filter-option"><input checked="" id="f-direct" type="checkbox"/><label for="f-direct">Direct (0 stops)</label></div>
+<div class="filter-option"><input checked="" id="f-one" type="checkbox"/><label for="f-one">1 Stop</label></div>
+<div class="filter-option"><input id="f-two" type="checkbox"/><label for="f-two">2+ Stops</label></div>
+</div>
+<div class="filter-section"><h4>Departure Time</h4>
+<div class="filter-option"><input checked="" id="f-morn" type="checkbox"/><label for="f-morn">Morning (06:00–12:00)</label></div>
+<div class="filter-option"><input checked="" id="f-aft" type="checkbox"/><label for="f-aft">Afternoon (12:00–18:00)</label></div>
+<div class="filter-option"><input checked="" id="f-eve" type="checkbox"/><label for="f-eve">Evening (18:00–00:00)</label></div>
+</div>
+<div class="filter-section"><h4>Price Range</h4>
+<div class="price-range">
+<input max="3000" min="400" oninput="document.getElementById('priceVal').textContent='SGD '+this.value" type="range" value="2000"/>
+<div class="price-display"><span>SGD 400</span><span id="priceVal">SGD 2,000</span></div>
+</div>
+</div>
+<div class="filter-section"><h4>Airlines</h4>
+<div class="filter-option"><input checked="" id="f-aa" type="checkbox"/><label for="f-aa">AuraAir</label></div>
+<div class="filter-option"><input checked="" id="f-sa" type="checkbox"/><label for="f-sa">Partner Airlines</label></div>
+</div>
+</div>
+<div>
+<div class="sort-bar">
+<span class="sort-label">Sort by</span>
+<button class="sort-btn active" onclick="setSort(this,'price')">Best Price</button>
+<button class="sort-btn" onclick="setSort(this,'duration')">Duration</button>
+<button class="sort-btn" onclick="setSort(this,'depart')">Departure</button>
+<button class="sort-btn" onclick="setSort(this,'arrive')">Arrival</button>
+</div>
+<div id="flightCards"></div>
+</div>
+</div>
+</div>
+<script src="../app.js" defer></script>
+</body>
+</html>
