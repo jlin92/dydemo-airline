@@ -630,7 +630,7 @@ function selectSeat(el, seatId, type){
   document.querySelectorAll('.seat.selected').forEach(function(s) {
     s.classList.remove('selected');
     s.classList.add(s.dataset.orig || 'available');
-  }
+  });
 
 
 // ----------------------------
