@@ -4,7 +4,6 @@
 
 document.documentElement.classList.add('js');
 
-
 // ----------------------------
 // State (persist across pages)
 // ----------------------------
