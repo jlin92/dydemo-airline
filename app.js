@@ -1,14 +1,11 @@
-// AuraAir multi-page site JS (MPA) — fixed for Vercel
-
-// Adds .js class for progressive enhancement
-
+// AuraAir multi-page JS (rewritten for MPA, fixes routing + results + seat map)
 document.documentElement.classList.add('js');
 
 // ----------------------------
-// State (persist across pages)
+// State (persist across full page loads)
 // ----------------------------
-const STATE_KEY = 'auraairState_v2';
-const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
+const STATE_KEY = 'auraairState_mpa_v3';
+const clone = (o) => JSON.parse(JSON.stringify(o));
 
 const defaultState = {
   tripType: 'return',
@@ -19,9 +16,9 @@ const defaultState = {
   searchReturn: null,
   cabinClass: 'Economy',
   selectedFare: { name: 'Economy Value', price: 698, flight: 'AU 301', depart: '07:55', arrive: '15:15', stops: 'Direct' },
-  selectedSeat: null,
   extrasSelected: [],
   extrasTotal: 0,
+  selectedSeat: null,
   totalPrice: 790,
   currentSort: 'price',
   confirmation: null
@@ -30,9 +27,9 @@ const defaultState = {
 function loadState(){
   try{
     const raw = sessionStorage.getItem(STATE_KEY);
-    if (!raw) return deepClone(defaultState);
+    if (!raw) return clone(defaultState);
     const s = JSON.parse(raw);
-    const base = deepClone(defaultState);
+    const base = clone(defaultState);
     return {
       ...base,
       ...s,
@@ -40,34 +37,31 @@ function loadState(){
       selectedFare: { ...base.selectedFare, ...(s.selectedFare || {}) }
     };
   } catch(e){
-    return deepClone(defaultState);
+    return clone(defaultState);
   }
 }
 
-function saveState(next){
+function saveState(patch){
   const cur = loadState();
-  const merged = {
+  const next = {
     ...cur,
-    ...(next || {}),
-    pax: { ...cur.pax, ...((next||{}).pax || {}) },
-    selectedFare: { ...cur.selectedFare, ...((next||{}).selectedFare || {}) }
+    ...(patch || {}),
+    pax: { ...cur.pax, ...((patch||{}).pax || {}) },
+    selectedFare: { ...cur.selectedFare, ...((patch||{}).selectedFare || {}) }
   };
-  sessionStorage.setItem(STATE_KEY, JSON.stringify(merged));
-  return merged;
+  sessionStorage.setItem(STATE_KEY, JSON.stringify(next));
+  return next;
 }
 
-// Navigation helper (relative; works on subpaths)
 function go(rel){ window.location.href = rel; }
-
 function getPage(){ return document.body?.dataset?.page || ''; }
 function getBookingStep(){
   const v = document.body?.dataset?.bookingStep;
   return v ? parseInt(v, 10) : null;
 }
 
-
 // ----------------------------
-// Nav behavior
+// Nav
 // ----------------------------
 function handleScroll(){
   const nav = document.getElementById('mainNav');
@@ -88,7 +82,6 @@ function initNav(){
     window.removeEventListener('scroll', handleScroll);
   }
 }
-
 
 // ----------------------------
 // Home controls
@@ -131,7 +124,6 @@ function captureSearchInputs(){
   const ret = document.getElementById('searchReturn')?.value || null;
   const cabin = document.getElementById('cabinClass')?.value || 'Economy';
   saveState({ searchFrom: from, selectedDest: to, searchDepart: depart, searchReturn: ret, cabinClass: cabin });
-  return { from, to, depart, ret, cabin };
 }
 
 function doSearch(){
@@ -145,7 +137,6 @@ function quickSearch(dest){
   captureSearchInputs();
   go('flightsearch/');
 }
-
 var destInfo = {
   'Tokyo':              { code: 'NRT', city: 'Tokyo Narita' },
   'Seoul':              { code: 'ICN', city: 'Seoul Incheon' },
@@ -180,16 +171,6 @@ var destInfo = {
   'Johannesburg':       { code: 'JNB', city: 'Johannesburg OR Tambo' },
   'Nairobi':            { code: 'NBO', city: 'Nairobi Jomo Kenyatta' }
 };
-
-
-// ----------------------------
-// Flight results
-// ----------------------------
-let currentSort = 'price';
-
-// ============================================================
-//  DYNAMIC FLIGHT GENERATION
-// ============================================================
 function seededRand(seed) {
   var t = seed + 0x6D2B79F5;
   return function () {
@@ -242,6 +223,7 @@ function generateFlights(dest) {
   }
   return flights;
 }
+
 
 function renderFlightCards(dest, info) {
   var listWrap = document.querySelector('#page-results .results-body > div:nth-child(2)');
@@ -306,63 +288,49 @@ function renderFlightCards(dest, info) {
   try { sortFlightCards(currentSort); } catch (e) {}
 }
 
-function updateResultsPage(dest) {
-  var info    = destInfo[dest] || { code: dest.substring(0, 3).toUpperCase(), city: dest };
-  var depart  = document.getElementById('searchDepart').value;
-  var dateStr = depart
-    ? new Date(depart).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
-    : 'Mon, 14 Jul 2025';
-
-  var skuResults = 'SIN-' + info.code;
-  var titleEl = document.getElementById('resultsTitle');
-  titleEl.textContent      = 'Singapore \u2192 ' + dest;
-  titleEl.dataset.sku      = skuResults;
-  document.getElementById('resultsSub').textContent   =
-    dateStr + ' \u00b7 ' + pax.adults + ' Adult' + (pax.adults > 1 ? 's' : '') +
-    ' \u00b7 ' + (document.getElementById('cabinClass').value || 'Economy') + ' \u00b7 24 results';
-  document.getElementById('r-to').innerHTML = '<option>' + dest + '</option>';
-  if (depart) document.getElementById('r-depart').value = depart;
-
-  renderFlightCards(dest, info);
-}
 
 
-
-function toggleOptions(btn) {
-  var card  = btn.closest('.flight-card');
-  var panel = card.querySelector('.flight-options-panel');
-  var isOpen = panel.classList.contains('open');
-  document.querySelectorAll('.flight-options-panel').forEach(function(p) { p.classList.remove('open'); });
+// ----------------------------
+// Flight options
+// ----------------------------
+function toggleOptions(btn){
+  const card = btn.closest('.flight-card');
+  const panel = card.querySelector('.flight-options-panel');
+  const isOpen = panel.classList.contains('open');
+  document.querySelectorAll('.flight-options-panel').forEach(p => p.classList.remove('open'));
   if (!isOpen) panel.classList.add('open');
 }
-
 
 function selectFare(card, fareName, price, flightNum, dep, arr, stopsText){
   document.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
   card.classList.add('selected');
-  const selectedFare = {
-    name: fareName,
-    price: parseInt(price, 10),
-    flight: flightNum,
-    depart: dep,
-    arrive: arr,
-    stops: stopsText || 'Direct'
-  };
-  // reset extras/seat for a new fare selection
-  saveState({ selectedFare, extrasSelected: [], extrasTotal: 0, selectedSeat: null, confirmation: null });
+
+  saveState({
+    selectedFare: {
+      name: fareName,
+      price: parseInt(price, 10),
+      flight: flightNum,
+      depart: dep,
+      arrive: arr,
+      stops: stopsText || 'Direct'
+    },
+    extrasSelected: [],
+    extrasTotal: 0,
+    selectedSeat: null,
+    confirmation: null
+  });
   go('../booking-step-1/');
 }
 
-// ============================================================
-//  SORT
-// ============================================================
-function setSort(btn, type) {
-  document.querySelectorAll('.sort-btn').forEach(function(b) { b.classList.remove('active'); });
-  btn.classList.add('active');
-  currentSort = type;
+// ----------------------------
+// Sorting
+// ----------------------------
+function setSort(btn, type){
+  document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  saveState({ currentSort: type });
   sortFlightCards(type);
 }
-
 function sortFlightCards(type) {
   var listWrap = document.querySelector('#page-results .results-body > div:nth-child(2)');
   if (!listWrap) return;
@@ -398,6 +366,7 @@ function sortFlightCards(type) {
   if (sortBar) listWrap.insertBefore(sortBar, listWrap.firstChild);
 }
 
+
 function parseMoney(text) {
   var m = String(text).replace(/,/g, '').match(/(\d+(?:\.\d+)?)/);
   return m ? parseFloat(m[1]) : NaN;
@@ -417,37 +386,117 @@ function parseTimeToMinutes(text) {
 
 
 
+// ----------------------------
+// Results page (MPA)
+// ----------------------------
+function ensureDefaultDates(){
+  const s = loadState();
+  if (s.searchDepart && s.searchReturn) return;
+  const today = new Date();
+  const dep = new Date(today); dep.setDate(dep.getDate() + 30);
+  const ret = new Date(dep); ret.setDate(ret.getDate() + 7);
+  const fmt = d => d.toISOString().split('T')[0];
+  saveState({ searchDepart: s.searchDepart || fmt(dep), searchReturn: s.searchReturn || fmt(ret) });
+}
 
-const _origSetSort = setSort;
-setSort = function(btn, type){
-  saveState({ currentSort: type });
-  return _origSetSort(btn, type);
-};
+function updateResultsPage(){
+  const s = loadState();
+  const dest = s.selectedDest || 'Tokyo';
+  const info = destInfo[dest] || { code: dest.substring(0,3).toUpperCase(), city: dest };
 
+  // Allow user overrides from results form (if present)
+  const rTo = document.getElementById('r-to');
+  const rDep = document.getElementById('r-depart');
+  const rRet = document.getElementById('r-return');
+
+  const destFromUI = rTo?.value || dest;
+  const depart = rDep?.value || s.searchDepart;
+  const ret = rRet?.value || s.searchReturn;
+
+  saveState({ selectedDest: destFromUI, searchDepart: depart, searchReturn: ret });
+
+  const effectiveInfo = destInfo[destFromUI] || { code: destFromUI.substring(0,3).toUpperCase(), city: destFromUI };
+
+  // Header
+  const titleEl = document.getElementById('resultsTitle');
+  if (titleEl){
+    titleEl.textContent = 'Singapore → ' + destFromUI;
+    titleEl.dataset.sku = 'SIN-' + effectiveInfo.code;
+  }
+
+  // Subtitle uses stored pax/cabin
+  const pax = s.pax || { adults: 1, children: 0 };
+  const cabin = s.cabinClass || 'Economy';
+
+  let dateStr = 'Mon, 14 Jul 2025';
+  try{
+    if (depart){
+      dateStr = new Date(depart).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+    }
+  } catch(e) {}
+
+  const subEl = document.getElementById('resultsSub');
+  if (subEl){
+    subEl.textContent = dateStr + ' · ' + (pax.adults||1) + ' Adult' + ((pax.adults||1)>1 ? 's' : '') + ' · ' + cabin + ' · 24 results';
+  }
+
+  // Make sure the dropdown shows the selected destination
+  if (rTo){
+    const exists = Array.from(rTo.options).some(o => o.value === destFromUI);
+    if (!exists){
+      rTo.innerHTML = '<option value="' + destFromUI + '">' + destFromUI + '</option>';
+    }
+    rTo.value = destFromUI;
+  }
+
+  // Render flight cards
+  renderFlightCards(destFromUI, effectiveInfo);
+
+  // Apply sort
+  try { sortFlightCards(loadState().currentSort || 'price'); } catch(e) {}
+}
 
 function initResultsPage(){
+  ensureDefaultDates();
   const s = loadState();
-  currentSort = s.currentSort || 'price';
-  updateResultsPage(s.selectedDest || 'Tokyo');
 
+  // Populate date fields
   const rDep = document.getElementById('r-depart');
   const rRet = document.getElementById('r-return');
   if (rDep && s.searchDepart) rDep.value = s.searchDepart;
   if (rRet && s.searchReturn) rRet.value = s.searchReturn;
 
-  try { sortFlightCards(currentSort); } catch(e) {}
+  // Populate destination dropdown
+  const rTo = document.getElementById('r-to');
+  if (rTo){
+    const dest = s.selectedDest || 'Tokyo';
+    const exists = Array.from(rTo.options).some(o => o.value === dest);
+    if (!exists){
+      rTo.innerHTML = '<option value="' + dest + '">' + dest + '</option>';
+    }
+    rTo.value = dest;
+  }
+
+  
+  // Set active sort button
+  const sort = s.currentSort || 'price';
+  const btns = Array.from(document.querySelectorAll('.sort-btn'));
+  btns.forEach(b => b.classList.remove('active'));
+  const map = { price: 'Best Price', duration: 'Duration', depart: 'Departure', arrive: 'Arrival' };
+  const label = map[sort];
+  const match = btns.find(b => (b.textContent||'').trim() === label);
+  if (match) match.classList.add('active');
+
+  updateResultsPage();
 }
 
 function refreshResults(){
-  const dest = document.getElementById('r-to')?.value || loadState().selectedDest || 'Tokyo';
-  saveState({ selectedDest: dest });
-  updateResultsPage(dest);
-  try { sortFlightCards(loadState().currentSort || 'price'); } catch(e) {}
+  // called by Update Search button
+  updateResultsPage();
 }
 
-
 // ----------------------------
-// Booking (per-step pages)
+// Booking pages (steps)
 // ----------------------------
 function setStepIndicators(step){
   for (let j=1;j<=4;j++){
@@ -463,63 +512,57 @@ function setStepIndicators(step){
   }
 }
 
-function updateSummaryTotals(){
+function updateSummary(){
   const s = loadState();
   const paxCount = (s.pax.adults||1) + (s.pax.children||0);
   const base = (s.selectedFare.price||0) * paxCount;
   const tax = Math.round(base * 0.13);
+  const extras = s.extrasTotal || 0;
+  const total = base + tax + extras;
 
   const lbl = document.getElementById('sum-base-label');
   if (lbl){
-    const a = s.pax.adults||1; const c = s.pax.children||0;
+    const a = s.pax.adults||1, c = s.pax.children||0;
     lbl.textContent = 'Base fare (' + a + ' adult' + (a>1?'s':'') + (c>0? ', ' + c + ' child' + (c>1?'ren':'') : '') + ')';
   }
 
-  const baseEl = document.getElementById('sum-base');
-  const taxEl = document.getElementById('sum-tax');
-  if (baseEl) baseEl.textContent = 'SGD ' + base.toLocaleString();
-  if (taxEl) taxEl.textContent = 'SGD ' + tax.toLocaleString();
+  const setText = (id,val) => { const el=document.getElementById(id); if(el) el.textContent=val; };
+  setText('sum-base', 'SGD ' + base.toLocaleString());
+  setText('sum-tax', 'SGD ' + tax.toLocaleString());
 
   const extrasRow = document.getElementById('sum-extras-row');
   const extrasEl = document.getElementById('sum-extras');
-  const ex = s.extrasTotal || 0;
   if (extrasRow && extrasEl){
-    extrasRow.style.display = ex>0 ? '' : 'none';
-    extrasEl.textContent = 'SGD ' + ex.toLocaleString();
+    extrasRow.style.display = extras>0 ? '' : 'none';
+    extrasEl.textContent = 'SGD ' + extras.toLocaleString();
   }
 
-  const total = base + tax + ex;
   saveState({ totalPrice: total });
-  const totalEl = document.getElementById('sum-total');
-  if (totalEl) totalEl.textContent = 'SGD ' + total.toLocaleString();
+  setText('sum-total', 'SGD ' + total.toLocaleString());
 }
 
-function updateBookingHeaderAndSummary(){
+function updateBookingHeader(){
   const s = loadState();
   const dest = s.selectedDest || 'Tokyo';
   const info = destInfo[dest] || { code: dest.substring(0,3).toUpperCase(), city: dest };
 
-  const bookingInfoEl = document.getElementById('bookingFlightInfo');
-  if (bookingInfoEl){
-    bookingInfoEl.textContent = 'AuraAir ' + s.selectedFare.flight + ' · Singapore → ' + dest + ' · ' + s.selectedFare.name;
+  const header = document.getElementById('bookingFlightInfo');
+  if (header){
+    header.textContent = 'AuraAir ' + s.selectedFare.flight + ' · Singapore → ' + dest + ' · ' + s.selectedFare.name;
   }
 
-  const sumRouteEl = document.getElementById('sum-route');
-  if (sumRouteEl){
-    sumRouteEl.textContent = 'SIN → ' + info.code;
-    sumRouteEl.dataset.sku = 'SIN-' + info.code;
+  const routeEl = document.getElementById('sum-route');
+  if (routeEl){
+    routeEl.textContent = 'SIN → ' + info.code;
+    routeEl.dataset.sku = 'SIN-' + info.code;
   }
 
-  const sumFlight = document.getElementById('sum-flight');
-  if (sumFlight) sumFlight.textContent = 'AuraAir ' + s.selectedFare.flight;
+  const setText = (id,val)=>{ const el=document.getElementById(id); if(el) el.textContent=val; };
+  setText('sum-flight', 'AuraAir ' + s.selectedFare.flight);
+  setText('sum-times', s.selectedFare.depart + ' → ' + s.selectedFare.arrive + ' · ' + (s.selectedFare.stops || 'Direct'));
+  setText('sum-fare', s.selectedFare.name);
 
-  const sumTimes = document.getElementById('sum-times');
-  if (sumTimes) sumTimes.textContent = s.selectedFare.depart + ' → ' + s.selectedFare.arrive + ' · ' + (s.selectedFare.stops || 'Direct');
-
-  const sumFare = document.getElementById('sum-fare');
-  if (sumFare) sumFare.textContent = s.selectedFare.name;
-
-  updateSummaryTotals();
+  updateSummary();
 }
 
 function nextStep(){
@@ -547,6 +590,7 @@ function recalcExtras(){
   const selectedCards = Array.from(document.querySelectorAll('.anc-card.selected'));
   let total = 0;
   const ids = [];
+
   selectedCards.forEach(card => {
     const id = card.dataset.ancId;
     if (id) ids.push(id);
@@ -561,8 +605,9 @@ function recalcExtras(){
     const mult = (lower.includes('/ person') || lower.includes('/person')) ? paxCount : 1;
     total += amount * mult;
   });
+
   saveState({ extrasSelected: ids, extrasTotal: total });
-  updateSummaryTotals();
+  updateSummary();
 }
 
 function applyExtrasFromState(){
@@ -578,9 +623,9 @@ function applyExtrasFromState(){
   recalcExtras();
 }
 
-// ============================================================
-//  SEAT MAP
-// ============================================================
+// ----------------------------
+// Seat map
+// ----------------------------
 function initSeatMap() {
   var map = document.getElementById('seatMap');
   if (!map || map.children.length > 0) return;
@@ -625,13 +670,28 @@ function initSeatMap() {
   }
 }
 
+
+
 function selectSeat(el, seatId, type){
+  // Fix: ensure the forEach callback is properly closed.
   document.querySelectorAll('.seat.selected').forEach(function(s) {
     s.classList.remove('selected');
     s.classList.add(s.dataset.orig || 'available');
-  })
-};
+  });
 
+  el.dataset.orig = (type === 'exit') ? 'exit' : 'available';
+  el.classList.remove('available', 'exit');
+  el.classList.add('selected');
+
+  saveState({ selectedSeat: seatId });
+
+  const disp = document.getElementById('selectedSeatDisplay');
+  const typ  = document.getElementById('selectedSeatType');
+  const exit = document.getElementById('exitFeature');
+  if (disp) disp.textContent = seatId;
+  if (typ) typ.textContent = (type === 'exit') ? 'Exit Row Seat' : 'Standard Economy';
+  if (exit) exit.style.display = (type === 'exit') ? 'block' : 'none';
+}
 
 // ----------------------------
 // Payment
@@ -640,8 +700,9 @@ function selectPayment(el){
   document.querySelectorAll('.payment-method').forEach(m => m.classList.remove('selected'));
   el.classList.add('selected');
 }
+
 function formatCard(input){
-  input.value = input.value.replace(/\D/g,'').substring(0,16).replace(/(.{4})/g,'$1 ').trim();
+  input.value = input.value.replace(/\D/g, '').substring(0, 16).replace(/(.{4})/g, '$1 ').trim();
 }
 
 // ----------------------------
@@ -649,7 +710,7 @@ function formatCard(input){
 // ----------------------------
 function confirmBooking(){
   const s = loadState();
-  const ref = 'AUR-' + Math.floor(100000 + Math.random()*900000);
+  const ref = 'AUR-' + Math.floor(100000 + Math.random() * 900000);
   const info = destInfo[s.selectedDest] || { code: (s.selectedDest||'TOK').substring(0,3).toUpperCase() };
   const conf = {
     ref,
@@ -658,7 +719,7 @@ function confirmBooking(){
     date: '14 Jul 2025',
     cabin: s.selectedFare.name,
     seat: s.selectedSeat || '32A',
-    total: 'SGD ' + (s.totalPrice||0).toLocaleString()
+    total: 'SGD ' + (s.totalPrice || 0).toLocaleString()
   };
   saveState({ confirmation: conf });
   go('../confirmation/');
@@ -667,7 +728,7 @@ function confirmBooking(){
 function initConfirmationPage(){
   const conf = loadState().confirmation;
   if (!conf) return;
-  const set = (id,val)=>{ const el=document.getElementById(id); if(el) el.textContent=val; };
+  const set = (id,val)=>{ const el=document.getElementById(id); if (el) el.textContent = val; };
   set('confRef', conf.ref);
   set('confFlight', conf.flight);
   set('confRoute', conf.route);
@@ -678,11 +739,10 @@ function initConfirmationPage(){
 }
 
 // ----------------------------
-// Scroll animations
+// Scroll animations + default dates
 // ----------------------------
 function initScrollAnimations(){
   if (!('IntersectionObserver' in window)){
-    // no IO support — show everything
     document.querySelectorAll('.fade-up').forEach(el => el.classList.add('visible'));
     return;
   }
@@ -692,10 +752,7 @@ function initScrollAnimations(){
   document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
 }
 
-// ----------------------------
-// Default dates
-// ----------------------------
-function initDates(){
+function initHomeDates(){
   const today = new Date();
   const dep = new Date(today); dep.setDate(dep.getDate() + 30);
   const ret = new Date(dep); ret.setDate(ret.getDate() + 7);
@@ -704,15 +761,15 @@ function initDates(){
   const depEl = document.getElementById('searchDepart');
   const retEl = document.getElementById('searchReturn');
 
-  if (depEl && !depEl.value) depEl.value = fmt(dep);
-  if (retEl && !retEl.value) retEl.value = fmt(ret);
+  const s = loadState();
+  if (depEl && !depEl.value) depEl.value = s.searchDepart || fmt(dep);
+  if (retEl && !retEl.value) retEl.value = s.searchReturn || fmt(ret);
 
-  // store (even if user edits later)
-  saveState({ searchDepart: depEl?.value || fmt(dep), searchReturn: retEl?.value || fmt(ret) });
+  saveState({ searchDepart: depEl?.value || s.searchDepart || fmt(dep), searchReturn: retEl?.value || s.searchReturn || fmt(ret) });
 }
 
 // ----------------------------
-// Bootstrap
+// Bootstrap per page
 // ----------------------------
 document.addEventListener('DOMContentLoaded', () => {
   initNav();
@@ -731,7 +788,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const idx = tabMap[trip] ?? 0;
     if (tabs[idx]) setTripType(trip, tabs[idx]);
 
-    initDates();
+    initHomeDates();
     initScrollAnimations();
   }
 
@@ -742,7 +799,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (page === 'booking'){
     const step = getBookingStep() || 1;
     setStepIndicators(step);
-    updateBookingHeaderAndSummary();
+    updateBookingHeader();
     if (step === 2) applyExtrasFromState();
     if (step === 3) initSeatMap();
 
@@ -755,11 +812,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// Explicitly expose key handlers (defensive; avoids issues if JS errors earlier)
+// Expose for inline onclick handlers
 Object.assign(window, {
   setTripType, changePax, doSearch, quickSearch,
-  refreshResults, toggleOptions, selectFare,
-  setSort, nextStep, prevStep,
+  toggleOptions, selectFare,
+  setSort, sortFlightCards,
+  refreshResults,
+  nextStep, prevStep,
   toggleAnc, selectPayment, formatCard,
-  confirmBooking
+  selectSeat, confirmBooking
 });
